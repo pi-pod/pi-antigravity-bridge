@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.11.0] - 2026-11-13
+
+### pi-pod fork
+
+- Publish as `@pipod/pi-antigravity-bridge`, retaining the `antigravity` provider ID and upstream MIT attribution.
+- Add `/login antigravity` through the official client: ACP browser sign-in locally, official terminal code flow through Pi on browserless hosts and pipod. Tokens stay in the official client's store; Pi keeps only a non-secret marker. Verify saved login with the official model catalog before returning success.
+- Add an explicit display-only pipod client entrypoint; the provider and backend CLI run only pod-side.
+- Respect Pi's agent directory for configuration, session bindings, model catalog, staged homes and logs.
+- Default to provider-only operation and prompting ACP permissions (`askTool: false`, `skipPermissions: false`).
+- Cancel both the terminal wrapper and its separate native-client process group, with bounded force-kill escalation and termination verification.
+
 ## [1.10.6] - 2026-11-13
 
 ### Fixed
