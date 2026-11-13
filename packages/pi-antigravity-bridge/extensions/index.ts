@@ -28,6 +28,8 @@ import {
 	createWriteToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
+import { loginAntigravity } from "../src/login.js";
+import { registerDisplayRenderers } from "../src/display-renderers.js";
 import { DIALOG_OPTIONS, DialogMenu, dialogBlocked, type DialogRow } from "@estebanforge/pi-tui-dialogs";
 import {
 	entriesFromRaw,
@@ -382,42 +384,7 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 	// ACP tool activity is display-only: durable Pi entries with native-looking
 	// titles and optional diffs. Unlike a synthetic Pi toolCall this does not
 	// re-execute edits, park the turn, or add tool results to model context.
-	if (engine === "acp") {
-		pi.registerEntryRenderer<NativeDisplayEvent>("agy-native-event", (entry, { expanded }, theme) => {
-			const event = entry.data;
-			// Collapsed detail: most-specific signal wins (path, command, agy's own
-			// display text). The name is NOT a fallback here - it rendered "ls ls"
-			// duplication whenever the event carried neither path nor command.
-			const firstLine = (value: string | undefined): string | undefined => value?.split(/\r?\n/, 1)[0].trim() || undefined;
-			const detail = event?.path ? path.basename(event.path) : firstLine(event?.command) ?? firstLine(event?.output);
-			const status = event?.status === "failed" ? theme.fg("error", "✗") : theme.fg("success", "✓");
-			const lines = [`${status} ${theme.fg("toolTitle", event?.name ?? "Antigravity")}${detail ? ` ${theme.fg("muted", detail.slice(0, 160))}` : ""}`];
-			if (expanded) {
-				if (event?.path) lines.push(theme.fg("dim", event.path));
-				if (event?.diff) {
-					for (const line of event.diff.split("\n")) {
-						const color = line.startsWith("+") ? "toolDiffAdded" : line.startsWith("-") ? "toolDiffRemoved" : "toolDiffContext";
-						lines.push(theme.fg(color, line));
-					}
-				}
-				if (event?.output && (!event.diff || event.status === "failed")) lines.push(theme.fg("toolOutput", event.output));
-			}
-			return new Text(lines.join("\n"), 0, 0);
-		});
-		// Collapsed poll runs: one ♊︎-marked counted line per consecutive poll
-		// burst instead of one entry per poll.
-		pi.registerEntryRenderer<PollRunData>("agy-poll-run", (entry, { expanded }, theme) => {
-			const run = entry.data;
-			const count = run?.count ?? 0;
-			const label = `Poll ${run?.target ?? "bridge call"} (x${count}${run?.state === "failed" ? ", failed" : ""})`;
-			const lines = [`♊︎ ${theme.fg("toolTitle", POLL_TOOL_NAME)} ${theme.fg("muted", label)}`];
-			if (expanded && run) {
-				const time = (iso: string): string => new Date(iso).toLocaleTimeString();
-				lines.push(theme.fg("dim", `${count} ${count === 1 ? "poll" : "polls"}, ${time(run.firstAt)} → ${time(run.lastAt)}`));
-			}
-			return new Text(lines.join("\n"), 0, 0);
-		});
-	}
+	if (engine === "acp") registerDisplayRenderers(pi);
 	let pendingNativeTools = 0;
 	const pollRuns = new PollRunFolder();
 	const closePollRun = (): void => {
@@ -611,6 +578,12 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 		name: "Antigravity (agy)",
 		baseUrl: "agy-bridge://antigravity",
 		apiKey: "not-used",
+		oauth: {
+			name: "Antigravity subscription (official agy client)",
+			login: (callbacks) => loginAntigravity(binary, callbacks),
+			refreshToken: async (credential, signal) => { signal.throwIfAborted(); return credential; },
+			getApiKey: () => "not-used",
+		},
 		api: "agy-bridge",
 		models: models.map((m) => ({
 			id: m.id,

@@ -318,7 +318,7 @@ test("ask tool: config mode plan defaults the delegation to plan with no skip fl
 	}
 });
 
-test("ask tool: accept-edits default keeps the skip flag", async () => {
+test("ask tool: accept-edits does not bypass permissions by default", async () => {
 	const agentsRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ro-ask-agents-"));
 	const argvFile = path.join(agentsRoot, "argv.txt");
 	const tool = await registerTool();
@@ -336,7 +336,7 @@ test("ask tool: accept-edits default keeps the skip flag", async () => {
 				const argv = fs.readFileSync(argvFile, "utf8").split("\0");
 				const modeIdx = argv.indexOf("--mode");
 				assert.equal(argv[modeIdx + 1], "accept-edits");
-				assert.ok(argv.includes("--dangerously-skip-permissions"), "accept-edits needs the flag to avoid the unanswerable prompt");
+				assert.equal(argv.includes("--dangerously-skip-permissions"), false, "delegation must explicitly opt into bypassing native permission prompts");
 			},
 		);
 	} finally {

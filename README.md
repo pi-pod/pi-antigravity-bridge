@@ -1,4 +1,8 @@
-# pi-extensions
+# pi-pod Antigravity bridge fork
+
+This fork maintains **[@pipod/pi-antigravity-bridge](packages/pi-antigravity-bridge)** for Pi and pipod. Install with `pi install npm:@pipod/pi-antigravity-bridge`. The extension remains in `packages/pi-antigravity-bridge`; the rest of this upstream monorepo is retained for history and its development toolchain, not republished by pi-pod.
+
+## Upstream pi-extensions
 
 Twenty-one [Pi Coding Agent](https://github.com/earendil-works/pi) extensions in one npm workspace. Install only what you need; each package publishes and installs on its own under the `@estebanforge` scope.
 

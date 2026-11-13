@@ -1,4 +1,19 @@
-# pi-antigravity-bridge
+# @pipod/pi-antigravity-bridge
+
+The pi-pod fork of [EstebanForge's Antigravity bridge](https://github.com/EstebanForge/pi-extensions/tree/main/packages/pi-antigravity-bridge), preserving its MIT license and attribution. Provider IDs remain `antigravity/*`; install only one bridge package.
+
+## pi-pod fork differences
+
+- `/login antigravity` uses the official `agy acp` authentication method. In a pod or SSH session, Pi gives `agy acp --login` a private terminal, displays its Google URL, and passes your pasted authorization code or final page URL back to that official client for validation. Linux pods need the `script` utility (util-linux). No tokens are extracted from the client; Pi stores a non-secret connection marker.
+- Provider-only by default: `AskAntigravity` is **off**. Native ACP permission auto-approval is **off**. Explicit opt-in is available through `/agy ask on` and `/agy permissions on` (the latter enables auto-approval, not more prompting).
+- Session/config/catalog/staged-home/log paths respect `PI_CODING_AGENT_DIR`, so pipod and custom Pi profiles do not write into an unrelated default agent directory.
+- `pipod.clientExtensions` selects a display-only launcher entrypoint. The provider, CLI processes, sign-in, MCP bridge and commands stay in the pod; native activity and poll entries render locally without running a second backend. This requires pipod's client-entrypoint support; older pipod launchers do not honor that declaration.
+
+### Use inside pipod
+
+Install the official `agy` CLI in the pod (for example through its template init script). Run `/login antigravity` in the attached session, complete Google's browser flow, and paste its authorization code or final page URL when asked. `/agy doctor` diagnoses the pod-side runtime; `/model` selects an `antigravity/*` model. A laptop login or Pi connection marker alone cannot authenticate another pod. Persist official-client state with the pod's home for reconnects. Account-level `pipod credentials` sharing is not supported for this client-managed login.
+
+Antigravity-native tools remain governed by Antigravity's policy, not Pi tool hooks. This integration is not a sandbox or a guarantee of subscription access, billing classification, or compliance with Google's terms. The upstream feature documentation follows; these fork defaults take precedence where it describes automatic approval or the delegation tool.
 
 A Gemini model provider **and** the `AskAntigravity` delegation tool for [pi](https://github.com/earendil-works/pi), built on the official `agy` CLI: **`agy acp`** by default, with the stream-json CLI engine kept as the fallback. It registers `antigravity/gemini-*` models in pi's `/model` picker (streaming), and provides the `AskAntigravity` tool for one-shot delegation - the same combined shape as `pi-claude-bridge`.
 
@@ -29,8 +44,8 @@ agy runs its own closed tool loop (`read_file`, `write_file`, `edit_file`, `run_
 Residual limits (with or without the bridge):
 
 - agy's own edits still land directly on disk; pi's inline diff review does not engage for them.
-- agy commands run without per-action approval by default, same as every other tool in pi. The [Approval gate](docs/APPROVAL-GATE.md) can put pi-side review in front of agy's mutating native tools (off by default; `auto` enables it only when a pi permission extension is installed). See also [Permissions](#permissions) below.
-- No cost accounting: cost stays zero because agy runs on your subscription quota. Token usage is live.
+- ACP asks for native permissions by default in this fork; an absent UI or denied prompt fails closed. The separate [Approval gate](docs/APPROVAL-GATE.md) can also put Pi-side review in front of mutating native tools (`auto` enables it only when a Pi permission extension is installed). Optional noninteractive delegation does not gain a permission UI automatically. See also [Permissions](#permissions) below.
+- No billed-cost accounting: the extension displays zero cost and live token usage. Zero displayed cost is not proof of subscription entitlement or the provider's actual billing.
 
 ## MCP tool bridge (agy uses pi's tools)
 
@@ -84,7 +99,7 @@ Full mechanics, configuration, and a sample gate extension: [docs/APPROVAL-GATE.
 Install with pi's package manager:
 
 ```bash
-pi install npm:@estebanforge/pi-antigravity-bridge
+pi install npm:@pipod/pi-antigravity-bridge
 ```
 
 Requires the **`agy` CLI** installed and authenticated. On an interactive start without it, the extension offers once per process to run Google's official installer after your confirmation, without blocking bridge startup. Linux and macOS use `set -o pipefail; curl -fsSL https://antigravity.google/cli/install.sh | bash`; Windows PowerShell uses `irm https://antigravity.google/cli/install.ps1 | iex`. Installation is verified before the success message. Then run `agy` once to complete Google OAuth and restart pi. The extension resolves `agy` on `$PATH`, or via `AGY_BIN`; a bad explicit override gets correction instructions instead of an install. Headless sessions print the instructions without installing.
@@ -115,7 +130,7 @@ If `agy models` fails at load (binary missing, auth not done, network stall), a 
 
 | Key | Values | Default |
 | --- | --- | --- |
-| `askTool` | `on` (register the AskAntigravity delegation tool), `off` (no delegation tool; provider and models only) | `on` |
+| `askTool` | `on` (register the AskAntigravity delegation tool), `off` (no delegation tool; provider and models only) | `off` |
 | `webTools` | `off` (no web tools), `on` (register `agy_web_search` + `agy_read_url` as Pi tools, usable by ANY provider's model). Each call spawns a one-shot search-only `agy` agent (plan mode, bridge MCP inheritance off), gates the answer on an observed native `search_web`/`read_url_content` step, and spends Antigravity quota. Off by default: Antigravity sessions already have native web tools on both engines; these serve other providers | `off` |
 | `bridgeTools` | `none` (bridge off), `all` (every non-builtin tool, incl. other `Ask*` delegations), `mcp` (pi-mcp-adapter tools + skills bridge only) | `all` |
 | `digest` | `off` (stable prompts; agy's prompt cache hits) or `on` (inject a delta of pi-side context - compaction summaries, other-provider turns - into each agy prompt; the delta changes every turn, so agy re-bills the full context). Enable for mixed-provider sessions where agy must see pi-side context | `off` |

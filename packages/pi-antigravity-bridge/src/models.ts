@@ -20,7 +20,7 @@
 
 import { spawn } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import path from "node:path";
 import type { Api, Model, ThinkingLevel, ThinkingLevelMap } from "@earendil-works/pi-ai";
 
@@ -200,9 +200,7 @@ export async function spawnAgyModelsRaw(binary: string): Promise<string> {
 export const MODELS_CACHE_TTL_MS = 5 * 60_000;
 
 const MODELS_CACHE_PATH = path.join(
-	os.homedir(),
-	".pi",
-	"agent",
+	getAgentDir(),
 	"antigravity-bridge",
 	"models-cache.json",
 );

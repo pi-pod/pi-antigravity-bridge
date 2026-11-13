@@ -4,21 +4,20 @@
 //
 // Knobs today:
 //   mode            "accept-edits" (default) or "plan". Drives agy's --mode.
-//   skipPermissions true (default). Passes --dangerously-skip-permissions so
-//                   commands don't hang on an unanswerable prompt in -p mode.
+//   skipPermissions false (fork default). ACP prompts through Pi; headless
+//                   or unanswerable requests fail closed. Explicit true bypasses
+//                   native prompts with --dangerously-skip-permissions.
 //
 // Env overrides (AGY_MODE, AGY_SKIP_PERMISSIONS) win over the file so tests
 // and one-off runs can force a setting without editing the file.
 
 import fs from "node:fs";
-import os from "node:os";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import path from "node:path";
 import { normalizeAgyAgentName } from "./agents.js";
 
 const CONFIG_PATH = path.join(
-	os.homedir(),
-	".pi",
-	"agent",
+	getAgentDir(),
 	"antigravity-bridge",
 	"config.json",
 );
@@ -29,11 +28,8 @@ const CONFIG_PATH = path.join(
  *  EstebanForge extensions. */
 export function logsDir(): string {
 	return path.join(
-		os.homedir(),
-		".pi",
-		"extensions-data",
-		"estebanforge",
-		"pi-antigravity-bridge",
+		getAgentDir(),
+		"antigravity-bridge",
 		"logs",
 	);
 }
@@ -200,10 +196,10 @@ const DEFAULTS: AgyConfig = {
 	engine: DEFAULT_ENGINE,
 	mode: "accept-edits",
 	readOnly: false,
-	skipPermissions: true,
+	skipPermissions: false,
 	defaultModel: "gemini-4-hydrogen",
 	defaultThinking: "medium",
-	askTool: true,
+	askTool: false,
 	webTools: false,
 	bridgeTools: "all",
 	digest: false,

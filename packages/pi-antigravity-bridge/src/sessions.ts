@@ -9,13 +9,11 @@
 // ~/.pi/agent/antigravity-bridge/sessions.json with atomic rename.
 
 import fs from "node:fs";
-import os from "node:os";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import path from "node:path";
 
 const STORE_PATH = path.join(
-	os.homedir(),
-	".pi",
-	"agent",
+	getAgentDir(),
 	"antigravity-bridge",
 	"sessions.json",
 );
