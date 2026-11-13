@@ -1,6 +1,6 @@
 {
   "name": "@pipod/pi-antigravity-bridge",
-  "version": "1.10.6",
+  "version": "1.11.0",
   "description": "Pi and pipod provider through the official Antigravity CLI, with ACP streaming, client-owned sign-in and a Pi MCP tool bridge.",
   "keywords": [
     "pi-package",
@@ -46,7 +46,9 @@
     ]
   },
   "pipod": {
-    "clientExtensions": ["./src/client-extension.ts"]
+    "clientExtensions": [
+      "./src/client-extension.ts"
+    ]
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "^1.5.2"
