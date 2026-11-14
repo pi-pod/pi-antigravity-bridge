@@ -2,7 +2,7 @@
 //
 // Covers read/writeModelsCache round-trip + validation, and the three
 // loadModelCatalogRaw branches (fresh -> no spawn, no-cache -> spawn + persist,
-// stale -> serve cached + background refresh). Spawning uses a temp fake `agy`
+// stale -> refresh before registration, retaining cache on failure). Spawning uses a temp fake `agy`
 // binary so no real agy is needed.
 // Run: npm test
 
@@ -89,9 +89,9 @@ test("loadModelCatalogRaw: no cache spawns agy and persists the result", async (
 	assert.equal(readCacheRaw(cachePath), "Gemini 3.6 Flash (Medium)"); // persisted
 });
 
-// --- loadModelCatalogRaw: stale cache -> serve + background refresh ---------
+// --- loadModelCatalogRaw: stale cache -> refresh this startup ---------------
 
-test("loadModelCatalogRaw: stale cache is served instantly, then refreshed in background", async () => {
+test("loadModelCatalogRaw: stale cache refresh reaches the current startup", async () => {
 	const cachePath = tempCachePath();
 	// Stale: savedAt well past the TTL.
 	const staleSavedAt = Date.now() - MODELS_CACHE_TTL_MS - 60_000;
@@ -99,10 +99,15 @@ test("loadModelCatalogRaw: stale cache is served instantly, then refreshed in ba
 	const bin = makeFakeAgy("NEW");
 
 	const raw = await loadModelCatalogRaw(bin, cachePath);
-	assert.equal(raw, "OLD"); // returned the stale cache without waiting
+	assert.equal(raw, "NEW");
+	assert.equal(readCacheRaw(cachePath), "NEW");
+});
 
-	// The background refresh updates the cache for the next load.
-	await waitForCacheRaw(cachePath, "NEW");
+test("loadModelCatalogRaw: failed stale refresh retains the last good catalog", async () => {
+	const cachePath = tempCachePath();
+	fs.writeFileSync(cachePath, JSON.stringify({ raw: "LAST-GOOD", savedAt: 0 }));
+	assert.equal(await loadModelCatalogRaw(makeFakeAgy(""), cachePath), "LAST-GOOD");
+	assert.equal(readCacheRaw(cachePath), "LAST-GOOD");
 });
 
 // --- refreshModelsInBackground: writes the cache on success -----------------
@@ -220,9 +225,9 @@ test("entriesFromRaw: splits slug from label in agy's real two-column output", (
 	]);
 });
 
-// Hidden families never register, even while `agy models` still lists them:
-// the single fixed slug goes away upstream next month and nobody used it.
-test("entriesFromRaw: drops hidden families outright", () => {
+// The official catalog, not a family preference or retirement prediction,
+// determines which provider models remain selectable.
+test("entriesFromRaw: retains every advertised family including fixed-thinking GPT-OSS", () => {
 	const raw = [
 		"gemini-3.8-flash-high",
 		"gemini-3.8-flash-low",
@@ -230,7 +235,9 @@ test("entriesFromRaw: drops hidden families outright", () => {
 		"gpt-oss-999b-medium",
 	].join("\n");
 	const ids = entriesFromRaw(raw).map((e) => e.id);
-	assert.deepEqual(ids, ["gemini-3-8-flash"]);
+	assert.deepEqual(ids, ["gemini-3-8-flash", "gpt-oss-120b-medium", "gpt-oss-999b-medium"]);
+	const fixed = entriesFromRaw(raw).find((entry) => entry.full === "gpt-oss-120b-medium")!;
+	assert.equal(fixed.efforts, undefined, "keep the exact native slug without inventing effort support");
 });
 
 // A banner word split from its line (col1 = "Available") is NOT a model slug.
@@ -245,6 +252,21 @@ test("entriesFromRaw: two-column output drops banner tokens lacking a hyphen", (
 	].join("\n");
 	const summary = entriesFromRaw(raw).map((e) => e.id);
 	assert.deepEqual(summary, ["gemini-3-6-flash"]);
+});
+
+test("entriesFromRaw: every current native model or effort variant remains reachable", () => {
+	const slugs = ["gemini-3.8-flash-high", "gemini-3.8-flash-medium", "gemini-3.8-flash-low", "claude-sonnet-4-6", "claude-opus-4-6-thinking", "gpt-oss-120b-medium"];
+	const entries = entriesFromRaw(slugs.join("\n"));
+	assert.equal(entries.length, 4);
+	const reachable = entries.flatMap((entry) => entry.efforts ? entry.efforts.map((effort) => `${entry.full}-${effort}`) : [entry.full]);
+	assert.deepEqual(reachable.sort(), [...slugs].sort());
+});
+
+test("toPiModel: GPT-OSS does not inherit Gemini image/context capabilities", () => {
+	const model = toPiModel({ full: "gpt-oss-120b-medium", id: "gpt-oss-120b-medium" }, ["text", "image"]);
+	assert.deepEqual(model.input, ["text"]);
+	assert.equal(model.contextWindow, 131_072);
+	assert.equal(model.reasoning, false, "native medium is fixed, not a selectable effort");
 });
 
 // --- toPiModel: toggle + level restriction follow the base's tiers -----------

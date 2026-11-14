@@ -130,7 +130,7 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 	// `agy update`.
 	// loadModelCatalogRaw serves a short-TTL cache (~/.pi/agent/antigravity-bridge/
 	// models-cache.json) so reloads are instant and only re-spawn in the
-	// background when stale. Derive both catalogs from the same raw text
+	// with a bounded refresh when stale. Derive both catalogs from the same raw text
 	// (provider's slugified Gemini entries + the tool's family/version/tier
 	// entries).
 	const raw = await loadModelCatalogRaw(binary);

@@ -14,9 +14,8 @@
 // Claude 5.5 accepts low/medium/high). The picked level is sent as agy
 // --effort; a bare base slug is INVALID on its own (agy: "requires --effort"),
 // so effort is always passed. Only unverified families keep agy's exact slug
-// with no toggle, so an unknown future family degrades safely; the retired
-// gpt-oss family is dropped outright (HIDDEN_FAMILY_RE). Google's Antigravity
-// subscription bills all of these through agy.
+// with no toggle, so an unknown future family degrades safely. Every model
+// advertised by the official client remains available, regardless of family.
 
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -104,11 +103,6 @@ const MODEL_LINE_RE = /^[A-Za-z0-9][A-Za-z0-9._]*-[A-Za-z0-9._-]*$/;
  *  rejected ("requires --effort"). */
 const EFFORT_CAPABLE_FAMILIES: readonly RegExp[] = [/^gemini-/, /^claude-/];
 
-/** Families dropped outright, even while `agy models` still lists them: the
- *  fixed-thinking single slug loses to the cheaper effort-tiered options and
- *  its removal upstream is already announced, so we stop offering it now. */
-const HIDDEN_FAMILY_RE = /^gpt-oss-/;
-
 export interface AgyModelEntry {
 	/** Exact agy --model string to pass: a base slug ("gemini-3.8-flash") when
 	 *  effort-driven, else agy's full qualified slug (unverified family). */
@@ -194,7 +188,7 @@ export async function spawnAgyModelsRaw(binary: string): Promise<string> {
 // `agy models` can take seconds (OAuth refresh, cold start) and its output
 // rarely changes. We persist it to ~/.pi/agent/antigravity-bridge/models-
 // cache.json with a short TTL so reloads serve instantly and only re-spawn in
-// the background when stale. Only successful (non-empty) output is cached, so
+// at startup when stale. Only successful (non-empty) output is cached, so
 // a broken agy is never sticky.
 
 export const MODELS_CACHE_TTL_MS = 5 * 60_000;
@@ -248,8 +242,7 @@ function writeModelsCache(raw: string, cachePath: string = MODELS_CACHE_PATH): v
 	}
 }
 
-/** Fire-and-forget refresh of the models cache. Called on a stale-cache load so
- *  the next load sees fresh data without this one having to wait on agy. */
+/** Explicit background cache refresh for callers that do not register a live catalog. */
 export function refreshModelsInBackground(
 	binary: string,
 	cachePath: string = MODELS_CACHE_PATH,
@@ -266,27 +259,20 @@ export function refreshModelsInBackground(
 /** Load the raw `agy models` text for catalog derivation, optimized for load
  *  time:
  *    - Fresh cache (< MODELS_CACHE_TTL_MS): return it, no spawn.
- *    - Stale cache (>= TTL): return it instantly, refresh in the background.
- *    - No cache: spawn once (blocks), persist. First-ever load only.
+ *    - Stale cache (>= TTL): await the bounded native refresh for this startup.
+ *    - No cache: spawn once (blocks), persist.
  *
- *  pi registers providers with a static model list, so a background refresh only
- *  updates the cache for the NEXT load; the current session keeps whatever this
- *  returned. The provider falls back to FALLBACK_MODELS when the raw yields no
- *  Gemini entries (agy missing/auth-failed). */
+ *  Retain the last good cache on failure. A successful refresh must reach this
+ *  session's provider registration, not only a second reload. */
 export async function loadModelCatalogRaw(
 	binary: string,
 	cachePath: string = MODELS_CACHE_PATH,
 ): Promise<string> {
 	const cache = readModelsCache(cachePath);
-	if (cache) {
-		if (Date.now() - cache.savedAt < MODELS_CACHE_TTL_MS) return cache.raw;
-		refreshModelsInBackground(binary, cachePath);
-		return cache.raw;
-	}
-	// No cache: populate it. Blocks once; later loads hit the cache above.
+	if (cache && Date.now() - cache.savedAt < MODELS_CACHE_TTL_MS) return cache.raw;
 	const raw = await spawnAgyModelsRaw(binary);
 	if (raw) writeModelsCache(raw, cachePath);
-	return raw;
+	return raw || cache?.raw || "";
 }
 
 /** Parse raw `agy models` text into the provider's model entries.
@@ -295,7 +281,7 @@ export async function loadModelCatalogRaw(
  *  effort-capable family) collapse to one BASE-slug entry carrying the tiers
  *  they accept. Models with 0 or 1 tier variants keep agy's exact qualified
  *  slug: without a verified effort-capable family match, --effort is never
- *  risked. Hidden families are dropped outright. Insertion order of
+ *  risked. No advertised model family is hidden. Insertion order of
  *  first-seen bases is preserved. */
 export function entriesFromRaw(raw: string): AgyModelEntry[] {
 	// agy prints TWO columns: "<slug>  <display label>". --model takes only the
@@ -306,7 +292,6 @@ export function entriesFromRaw(raw: string): AgyModelEntry[] {
 	for (const line of raw.split("\n")) {
 		const slug = line.trim().split(/\s+/)[0] ?? "";
 		if (!slug || !MODEL_LINE_RE.test(slug)) continue;
-		if (HIDDEN_FAMILY_RE.test(slug)) continue;
 		const m = TIER_RE.exec(slug);
 		const base = m ? (m[1] as string) : slug;
 		const tier = m ? (m[2] as AgyEffort) : null;
@@ -363,6 +348,7 @@ function thinkingLevelMapFor(efforts: readonly AgyEffort[]): ThinkingLevelMap {
  *  stream-json staged files), so callers pass ["text", "image"] uniformly. */
 export function toPiModel(entry: AgyModelEntry, input: Array<"text" | "image"> = ["text"]): Model<Api> {
 	const effortDriven = !!entry.efforts && entry.efforts.length > 0;
+	const gptOss = entry.full.startsWith("gpt-oss-");
 	return {
 		id: entry.id,
 		name: entry.full,
@@ -379,11 +365,10 @@ export function toPiModel(entry: AgyModelEntry, input: Array<"text" | "image"> =
 		...(effortDriven ? { thinkingLevelMap: thinkingLevelMapFor(entry.efforts!) } : {}),
 		// Input advertising comes from the caller: both engines deliver
 		// user-attached images now.
-		input,
+		input: gptOss ? ["text"] : input,
 		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-		// Gemini long context. agy doesn't expose the real per-model window in
-		// `agy models`; 1M is the documented Gemini ceiling.
-		contextWindow: 1_000_000,
+		// agy models omits limits; do not give GPT-OSS the Gemini 1M ceiling.
+		contextWindow: gptOss ? 131_072 : 1_000_000,
 		maxTokens: 65_536,
 	};
 }
@@ -400,6 +385,9 @@ export const FALLBACK_MODELS: AgyModelEntry[] = [
 	{ full: "gemini-3.8-flash", id: "gemini-3-8-flash", efforts: ["low", "medium", "high"] },
 	{ full: "gemini-3.1-pro", id: "gemini-3-1-pro", efforts: ["low", "high"] },
 	{ full: "claude-sonnet-5-5", id: "claude-sonnet-5-5", efforts: ["low", "medium", "high"] },
+	{ full: "claude-sonnet-4-6", id: "claude-sonnet-4-6" },
+	{ full: "claude-opus-4-6-thinking", id: "claude-opus-4-6-thinking" },
+	{ full: "gpt-oss-120b-medium", id: "gpt-oss-120b-medium" },
 ];
 
 
