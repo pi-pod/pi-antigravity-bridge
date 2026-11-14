@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Always include Gemini 3.8 Flash, Gemini 4 Argon, and Gemini 4 Carbon in the provider picker and offline fallback, even when the native catalog omits them. Preserve discovered models and their thinking levels without duplicate entries; official-client access checks remain unchanged.
+
 ## [1.11.1] - 2026-11-13
 
 ### Fixed

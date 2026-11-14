@@ -4,7 +4,7 @@ The pi-pod fork of [EstebanForge's Antigravity bridge](https://github.com/Esteba
 
 ## pi-pod fork differences
 
-- The provider picker retains every model advertised by `agy models`, including GPT-OSS. Verified effort variants share a model entry with the matching thinking-level selector; fixed models retain their exact native slug. Expired catalog caches refresh before startup registration, with last-good fallback on failure.
+- The provider picker retains every model advertised by `agy models`, including GPT-OSS, and always includes Gemini 3.8 Flash, Gemini 4 Argon, and Gemini 4 Carbon even when the native catalog omits them. These extra choices do not grant account access or bypass native-client errors. Verified discovered effort variants share a model entry with the matching thinking-level selector; fixed models retain their exact native slug. Expired catalog caches refresh before startup registration, with last-good fallback on failure.
 - `/login antigravity` uses the official `agy acp` authentication method. In a pod or SSH session, Pi gives `agy acp --login` a private terminal, displays its Google URL, and passes your pasted authorization code or final page URL back to that official client for validation. Linux pods need the `script` utility (util-linux). No tokens are extracted from the client; Pi stores a non-secret connection marker.
 - Provider-only by default: `AskAntigravity` is **off**. Native ACP permission auto-approval is **off**. Explicit opt-in is available through `/agy ask on` and `/agy permissions on` (the latter enables auto-approval, not more prompting).
 - Session/config/catalog/staged-home/log paths respect `PI_CODING_AGENT_DIR`, so pipod and custom Pi profiles do not write into an unrelated default agent directory.

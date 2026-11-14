@@ -16,6 +16,8 @@
 // so effort is always passed. Only unverified families keep agy's exact slug
 // with no toggle, so an unknown future family degrades safely. Every model
 // advertised by the official client remains available, regardless of family.
+// Known Gemini models also remain selectable when the client's catalog omits
+// them; the official client still decides whether a requested turn can run.
 
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -373,6 +375,21 @@ export function toPiModel(entry: AgyModelEntry, input: Array<"text" | "image"> =
 	};
 }
 
+/** Gemini choices kept in the picker even when the native catalog omits
+ *  them. Selection does not imply account entitlement or native acceptance. */
+const KNOWN_GEMINI_MODELS: AgyModelEntry[] = [
+	{ full: "gemini-3.8-flash", id: "gemini-3-8-flash", efforts: ["low", "medium", "high"] },
+	{ full: "gemini-4-argon", id: "gemini-4-argon", efforts: ["low", "medium", "high"] },
+	{ full: "gemini-4-carbon", id: "gemini-4-carbon", efforts: ["low", "medium", "high"] },
+];
+
+/** Keep known Gemini choices alongside discovery, without replacing native
+ *  metadata, dropping future models, or duplicating an existing model ID. */
+export function withKnownGeminiModels(entries: readonly AgyModelEntry[]): AgyModelEntry[] {
+	const ids = new Set(entries.map((entry) => entry.id));
+	return [...entries, ...KNOWN_GEMINI_MODELS.filter((entry) => !ids.has(entry.id))];
+}
+
 /** Fallback catalog used when `agy models` fails at load (binary missing,
  *  auth not yet done, network stall). Keeps the picker populated so the user
  *  can still select a model and get a clear runtime error instead of an empty
@@ -382,7 +399,7 @@ export const FALLBACK_MODELS: AgyModelEntry[] = [
 	// AskAntigravity default (config.ts) so the default stays resolvable when
 	// `agy models` fails.
 	{ full: "gemini-4-hydrogen", id: "gemini-4-hydrogen", efforts: ["low", "medium", "high"] },
-	{ full: "gemini-3.8-flash", id: "gemini-3-8-flash", efforts: ["low", "medium", "high"] },
+	...KNOWN_GEMINI_MODELS,
 	{ full: "gemini-3.1-pro", id: "gemini-3-1-pro", efforts: ["low", "high"] },
 	{ full: "claude-sonnet-5-5", id: "claude-sonnet-5-5", efforts: ["low", "medium", "high"] },
 	{ full: "claude-sonnet-4-6", id: "claude-sonnet-4-6" },

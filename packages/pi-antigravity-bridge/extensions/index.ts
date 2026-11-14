@@ -36,6 +36,7 @@ import {
 	FALLBACK_MODELS,
 	loadModelCatalogRaw,
 	toPiModel,
+	withKnownGeminiModels,
 	type AgyModelEntry,
 } from "../src/models.js";
 import { SessionStore } from "../src/sessions.js";
@@ -137,7 +138,7 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 	const discovered = entriesFromRaw(raw);
 	const toolModels = toolModelsFromRaw(raw);
 	const usingFallback = discovered.length === 0;
-	const entries: AgyModelEntry[] = usingFallback ? FALLBACK_MODELS : discovered;
+	const entries = withKnownGeminiModels(usingFallback ? FALLBACK_MODELS : discovered);
 	// Engine latched at load: /agy engine takes effect on the next pi start
 	// (documented). Everything below resolves from THIS value - per-call
 	// config reads would let a mid-session flip leave ToolRoundTrips,

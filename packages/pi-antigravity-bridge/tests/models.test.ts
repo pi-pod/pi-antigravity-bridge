@@ -13,12 +13,14 @@ import path from "node:path";
 import { test } from "vitest";
 import {
 	entriesFromRaw,
+	FALLBACK_MODELS,
 	loadModelCatalogRaw,
 	MODELS_CACHE_TTL_MS,
 	MODELS_OUTPUT_CAP_BYTES,
 	refreshModelsInBackground,
 	spawnAgyModelsRaw,
 	toPiModel,
+	withKnownGeminiModels,
 } from "../src/models.js";
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -267,6 +269,48 @@ test("toPiModel: GPT-OSS does not inherit Gemini image/context capabilities", ()
 	assert.deepEqual(model.input, ["text"]);
 	assert.equal(model.contextWindow, 131_072);
 	assert.equal(model.reasoning, false, "native medium is fixed, not a selectable effort");
+});
+
+// --- known Gemini choices supplement, but never replace, discovery ----------
+
+test("withKnownGeminiModels: Flash, Argon, and Carbon survive an empty catalog", () => {
+	const entries = withKnownGeminiModels([]);
+	assert.deepEqual(entries.map((entry) => entry.id), [
+		"gemini-3-8-flash", "gemini-4-argon", "gemini-4-carbon",
+	]);
+	for (const entry of entries) {
+		assert.deepEqual(entry.efforts, ["low", "medium", "high"]);
+		assert.equal(toPiModel(entry).reasoning, true);
+	}
+	assert.equal(entries[0].full, "gemini-3.8-flash", "preserve the native dotted slug");
+});
+
+test("withKnownGeminiModels: partial discovery keeps every model and adds missing Gemini choices", () => {
+	const discovered = entriesFromRaw("gemini-3.8-flash-low\ngemini-3.8-flash-high\ngpt-oss-120b-medium\nfuture-model-x");
+	const entries = withKnownGeminiModels(discovered);
+	assert.deepEqual(entries.map((entry) => entry.id), [
+		"gemini-3-8-flash", "gpt-oss-120b-medium", "future-model-x", "gemini-4-argon", "gemini-4-carbon",
+	]);
+	assert.deepEqual(entries[0].efforts, ["low", "high"], "prefer native thinking levels");
+	assert.equal(discovered.length, 3, "do not mutate discovery");
+});
+
+test("withKnownGeminiModels: advertised Gemini 4 entries retain metadata without duplicates", () => {
+	const discovered = entriesFromRaw("gemini-4-argon-low\ngemini-4-argon-high\ngemini-4-carbon-low\ngemini-4-carbon-high");
+	const entries = withKnownGeminiModels(discovered);
+	assert.equal(entries.length, 3);
+	assert.equal(entries[0], discovered[0]);
+	assert.equal(entries[1], discovered[1]);
+	assert.equal(new Set(entries.map((entry) => entry.id)).size, entries.length);
+	assert.deepEqual(withKnownGeminiModels(entries), entries, "merging is idempotent");
+});
+
+test("FALLBACK_MODELS: includes Flash, Argon, and Carbon without changing the offline default", () => {
+	assert.equal(FALLBACK_MODELS[0].id, "gemini-4-hydrogen");
+	for (const id of ["gemini-3-8-flash", "gemini-4-argon", "gemini-4-carbon"]) {
+		assert.equal(FALLBACK_MODELS.filter((entry) => entry.id === id).length, 1);
+	}
+	assert.deepEqual(withKnownGeminiModels(FALLBACK_MODELS), FALLBACK_MODELS);
 });
 
 // --- toPiModel: toggle + level restriction follow the base's tiers -----------
