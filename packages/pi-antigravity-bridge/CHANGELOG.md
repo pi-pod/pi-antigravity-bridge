@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.11.1] - 2026-11-13
+
+### Fixed
+
+- Preserve every official-client provider model, including GPT-OSS, rather than hiding a family still advertised by both CLI and ACP.
+- Refresh expired catalog caches before registering the current startup's models; retain the last good catalog if refresh fails.
+- Include current Claude 4.6 and GPT-OSS models in the offline fallback snapshot while preserving existing entries.
+- Declare GPT-OSS as text-only with its 128K context ceiling rather than inheriting Gemini's image/1M defaults.
+
 ## [1.11.0] - 2026-11-13
 
 ### pi-pod fork
